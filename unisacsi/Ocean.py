@@ -599,6 +599,8 @@ def CTD_to_xarray(
     ds["OX"].attrs["long_name"] = "Oxygen"
     ds["bottom_depth"].attrs["units"] = "m"
     ds["depth"].attrs["units"] = "m"
+    ds["water_mass"].attrs['long_name'] = "Water mass"
+    ds['water_mass_Abbr'].attrs['long_name'] = "Water mass"
     ds["Lt"].attrs["long_name"] = "Thorpe Length"
     ds["thorpe_disp"].attrs["long_name"] = "Thorpe Displacement"
     
@@ -2091,12 +2093,12 @@ def VMADCP_calculate_crossvel(ds: xr.Dataset) -> xr.Dataset:
         np.deg2rad(angle_deg)
     ) - u * np.cos(np.deg2rad(angle_deg))
     
-    ds["crossvel"] = xr.apply_ufunc(
+    ds["crossvel_ship"] = xr.apply_ufunc(
         calc_crossvel, ds["u_detide"], ds["v_detide"], ds["Heading_ship"]
     )
-    ds["crossvel"].attrs["name"] = "crossvel"
-    ds["crossvel"].attrs["units"] = "m/s"
-    ds["crossvel"].attrs[
+    ds["crossvel_ship"].attrs["name"] = "crossvel_ship"
+    ds["crossvel_ship"].attrs["units"] = "m/s"
+    ds["crossvel_ship"].attrs[
         "long_name"
     ] = "Current velocity (detided) perpendicular to the ship track"
 
@@ -2105,12 +2107,12 @@ def VMADCP_calculate_crossvel(ds: xr.Dataset) -> xr.Dataset:
         np.deg2rad(angle_deg)
     ) + v * np.cos(np.deg2rad(angle_deg))
 
-    ds["alongvel"] = xr.apply_ufunc(
+    ds["alongvel_ship"] = xr.apply_ufunc(
         calc_alongvel, ds["u_detide"], ds["v_detide"], ds["Heading_ship"]
     )
-    ds["alongvel"].attrs["name"] = "alongvel"
-    ds["alongvel"].attrs["units"] = "m/s"
-    ds["alongvel"].attrs[
+    ds["alongvel_ship"].attrs["name"] = "alongvel_ship"
+    ds["alongvel_ship"].attrs["units"] = "m/s"
+    ds["alongvel_ship"].attrs[
         "long_name"
     ] = "Current velocity (detided) parallel to the ship track"
 
@@ -5521,11 +5523,20 @@ def plot_xarray_sections(
                 cmap=list_cmaps[i],
                 levels=list_clevels[i],
                 extend="both",
+                add_colorbar = False,
             )
             pics.append(pic)
             if switch_cbar:
-                cbar = plt.colorbar(pic, ax=axes[i])
-                cbar.ax.set_ylabel(da.attrs["long_name"])
+                if da.name == "water_mass":
+                    path = "C:/Users/Dora van der Pluijm/OneDrive - VDP Beheer/Documents/UiO/thesis/data/"
+                    wm = pd.read_csv(os.path.join(path,'AGF214/water_masses.csv'), sep=';')
+                    cbar = plt.colorbar(pic, ax=axes[i]) #, extend="neither", extendrect=True)
+                    cbar.ax.set_yticks(np.arange(7))
+                    cbar.ax.set_yticklabels(wm["Abbr"].tolist())
+                    cbar.ax.set_ylabel(da.attrs['long_name'])
+                else: 
+                    cbar = plt.colorbar(pic, ax=axes[i])
+                    cbar.ax.set_ylabel(da.attrs["long_name"])
         else:
             pic = da.plot.pcolormesh(
                 x="distance",
