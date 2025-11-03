@@ -589,21 +589,28 @@ def CTD_to_xarray(
     if switch_xdim == "station":
         ds = ds.swap_dims({"time": "station"})
 
-    ds["SA"].attrs["long_name"] = "Absolute Salinity"
-    ds["S"].attrs["long_name"] = "Salinity"
-    ds["CT"].attrs["long_name"] = "Conservative Temperature"
-    ds["T"].attrs["long_name"] = "Temperature"
-    ds["C"].attrs["long_name"] = "Conductivity"
-    ds["P"].attrs["long_name"] = "Pressure"
-    ds["SIGTH"].attrs["long_name"] = "Density (sigma-theta)"
-    ds["OX"].attrs["long_name"] = "Oxygen"
-    ds["bottom_depth"].attrs["units"] = "m"
-    ds["depth"].attrs["units"] = "m"
-    ds["water_mass"].attrs['long_name'] = "Water mass"
-    ds['water_mass_Abbr'].attrs['long_name'] = "Water mass"
-    ds["Lt"].attrs["long_name"] = "Thorpe Length"
-    ds["thorpe_disp"].attrs["long_name"] = "Thorpe Displacement"
-    
+    variables = {
+        "SA": {"long_name": "Absolute Salinity"},
+        "S": {"long_name": "Salinity"},
+        "CT": {"long_name": "Conservative Temperature"},
+        "T": {"long_name": "Temperature"},
+        "C": {"long_name": "Conductivity"},
+        "P": {"long_name": "Pressure"},
+        "SIGTH": {"long_name": "Density (sigma-theta)"},
+        "OX": {"long_name": "Oxygen"},
+        "bottom_depth": {"units": "m"},
+        "depth": {"units": "m"},
+        "water_mass": {"long_name": "Water mass"},
+        "water_mass_Abbr": {"long_name": "Water mass"},
+        "Lt": {"long_name": "Thorpe Length"},
+        "thorpe_disp": {"long_name": "Thorpe Displacement"}
+    }
+
+    for var, attrs in variables.items():
+        if var in ds:
+            for key, value in attrs.items():
+                ds[var].attrs[key] = value
+                
     ds.attrs = {"source": "CTD_to_xarray"}
 
     return ds
@@ -717,7 +724,7 @@ def section_to_xarray(
         if direction == 'WE':
             ds_section = ds.sel(station=stations).sortby('lon')
         elif direction == 'NS':
-            ds_section = ds.sel(station=stations).sortby('lat', ascending=False)
+            ds_section = ds.sel(station=stations).sortby('lat')
         else:
             ds_section = ds.sel(station=stations)
         ds_section["distance"] = xr.DataArray(
