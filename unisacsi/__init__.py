@@ -1,4 +1,4 @@
-__version__ = "1.0.8"
+__version__ = "1.0.10"
 __authors__: list[str] = [
     "Lukas Frank <lukasf@unis.no",
     "Jakob Dörr <jakob.dorr@uib.no",
