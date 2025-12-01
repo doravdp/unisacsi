@@ -2127,7 +2127,7 @@ def VMADCP_calculate_crossvel(ds: xr.Dataset) -> xr.Dataset:
 
 
 def read_LADCP(
-    filepath: str, station_dict: dict, switch_xdim: __switch_xdim__ = "station"
+    filepath: str, station_dict: dict, switch_xdim: __switch_xdim__ = "station", interp_8m=False
 ) -> xr.Dataset:
     """Function to read the data from the LADCP-mat-files.
 
@@ -2136,7 +2136,7 @@ def read_LADCP(
         station_dict (dict): The CTD dictionary or dictionary connecting the ship station numbers to the UNIS station numbers.
             - Can be generated from the CTD-dict with 'stations_dict = {CTD[i]["st"]: i for i in CTD.keys()}'.
         switch_xdim (str, optional): Keyword to switch between time and station (UNIS station number) as x dimension for the returned data set. Defaults to "station".
-
+        interp_8m (bool, optional): Interpolate to 8m depth bins? Defaults to False.
     Returns:
         xr.Dataset: xarray dataset containing the l-adcp data.
     """
@@ -2176,7 +2176,10 @@ def read_LADCP(
         list_of_dfs: list[pd.DataFrame] = []
         for st in range(len(adcp["stnr"])):
             max_depth: float = np.floor((np.nanmax(adcp["Z"][:, st])))
-            grid: np.ndarray = np.arange(max_depth)
+            if interp_8m == True:
+                grid: np.ndarray = np.arange(start=8, stop=max_depth+7, step=8)
+            else:
+                grid: np.ndarray = np.arange(max_depth)
             df: pd.DataFrame = pd.DataFrame(
                 adcp[vari][:, st],
                 index=adcp["Z"][:, st],
