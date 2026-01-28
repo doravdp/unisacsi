@@ -303,7 +303,7 @@ def CTD_to_grid(
     stations: npt.ArrayLike = None,
     interp_opt: int = 1,
     x_type: __x_type__ = "distance",
-    z_fine: bool = False,
+    z_fine: float = 1,
 ) -> tuple[dict, np.ndarray, np.ndarray, np.ndarray]:
     """This function accepts a CTD dict of dicts, finds out the maximum
     length of the depth vectors for the given stations, and fills all
@@ -374,8 +374,10 @@ def CTD_to_grid(
     maxdepth: float = np.nanmax([np.nanmax(-CTD[i]["z [m]"]) for i in stations])
     mindepth: float = np.nanmin([np.nanmin(-CTD[i]["z [m]"]) for i in stations])
     if z_fine:
+        # change: i want unbinned data to retain original grid. it has an av. sample size of 0.02. this means multiply by 50
+        # generalize: z_fine should be the size of the grid
         Z: np.ndarray = np.linspace(
-            mindepth, maxdepth, int((maxdepth - mindepth) * 10) + 1
+            mindepth, maxdepth, int((maxdepth - mindepth) / z_fine) + 1
         )
     else:
         Z = np.linspace(mindepth, maxdepth, int(maxdepth - mindepth) + 1)
