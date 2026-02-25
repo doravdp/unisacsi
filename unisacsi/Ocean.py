@@ -604,8 +604,12 @@ def CTD_to_xarray(
         "depth": {"units": "m"},
         "water_mass": {"long_name": "Water mass"},
         "water_mass_Abbr": {"long_name": "Water mass"},
-        "Lt": {"long_name": "Thorpe Length"},
-        "thorpe_disp": {"long_name": "Thorpe Displacement"}
+        "Lt": {"long_name": "Thorpe Length", "units" : "m"},
+        "thorpe_disp": {"long_name": "Thorpe Displacement", "units" : "m"},
+        "eps_thorpe" : {"long_name" : "Dissipation Rate (Thorpe)", "units" : "W/kg"},
+        "Kp_thorpe" : {"long_name" : "Turbulent Diffusivity (Thorpe)", "units" : "m$^2$/s"},
+        "N2_thorpe_bulk" : {"long_name" : "Buoyancy Frequency (Thorpe, bulk)", "units" : "s$^{-1}$"},
+        "N2_thorpe_linear" : {"long_name" : "Buoyancy Frequency (Thorpe, linear)", "units" : "s$^{-1}$"},
     }
 
     for var, attrs in variables.items():
