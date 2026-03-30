@@ -1397,6 +1397,7 @@ def ctd_identify_water_masses(
 
 def calc_baroclinic_velocity(
     ds: xr.Dataset,
+    LADCP: xr.Dataset,
     upper_boundary: int | list[int] = None,
     lower_boundary: int | list[int] = None,
 ) -> xr.Dataset:
@@ -1521,9 +1522,24 @@ def calc_baroclinic_velocity(
     # cumsum() integrates the data numerically by the given parameter
     ds["baroclinic_velocity"] = (
         (dv_dz * dz).sortby(dv_dz.depth, ascending=False).cumsum("depth")
-    )
+    ).where(dv_dz.depth <= dv_dz.bottom_depth)
     ds["baroclinic_velocity"].attrs["units"] = "m/s"
     ds["baroclinic_velocity"].attrs["long_name"] = "Baroclinic velocity"
+
+    # remove BT component from BC
+    ds['baroclinic_velocity'] = ds['baroclinic_velocity'] - ds['baroclinic_velocity'].mean(dim='depth')
+    
+    # add observed BT component from LADCP
+    u_bt = 0.5 * (LADCP.u_detide + LADCP.v_detide).mean(dim='depth').where(LADCP.station.isin(ds.station), drop=True)
+    u_bt = u_bt.sel(station=ds.station)
+    ds = ds.assign(barotropic_velocity=u_bt)
+    
+    ds["barotropic_velocity"].attrs["units"] = "m/s"
+    ds["barotropic_velocity"].attrs["long_name"] = "Barotropic velocity"
+    
+    ds['geostrophic_velocity'] = ds.baroclinic_velocity + ds.barotropic_velocity
+    ds["geostrophic_velocity"].attrs["units"] = "m/s"
+    ds["geostrophic_velocity"].attrs["long_name"] = "Geostrophic velocity"
 
     return ds
 
@@ -2255,7 +2271,6 @@ def read_LADCP(
 
     return ds
 
-
 def read_CTD(
     inpath: str,
     cruise_name: str = "cruise",
@@ -2620,7 +2635,7 @@ def read_MSS(files: str, excel_file: str = None) -> tuple[dict, dict, dict]:
             - Dictionary with the DATA data.
     """
 
-    if excel_file == None:
+    if excel_file is None:
         pass
     elif not isinstance(excel_file, str):
         raise TypeError(
@@ -5487,6 +5502,7 @@ def plot_xarray_sections(
     add_station_ticks: bool = True,
     fig: plt.Figure = None,
     axes: list[plt.Axes] = None,
+    sill_depth: int = None,
 ) -> tuple[plt.Figure, list[Any], list]:
     """Function to plot a variable number of variables from a section.
     Data can be from CTD or ADCP, but has to be provided as xarray datasets (see example notebook!)
@@ -5702,6 +5718,8 @@ def plot_xarray_sections(
 
         axes[i].set_xlabel("")
         axes[i].set_ylabel("Depth [m]")
+        if sill_depth is not None:
+            axes[i].axhline(sill_depth, color="k", linewidth=3, linestyle="--", label="Sill depth")
 
     # extract bathymetry
     bottom = None
