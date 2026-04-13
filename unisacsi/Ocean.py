@@ -1530,9 +1530,15 @@ def calc_baroclinic_velocity(
     ds['baroclinic_velocity'] = ds['baroclinic_velocity'] - ds['baroclinic_velocity'].mean(dim='depth')
     
     # add observed BT component from LADCP
-    u_bt = 0.5 * (LADCP.u_detide + LADCP.v_detide).mean(dim='depth').where(LADCP.station.isin(ds.station), drop=True)
-    u_bt = u_bt.sel(station=ds.station)
-    ds = ds.assign(barotropic_velocity=u_bt)
+    u_bt = LADCP.crossvel_ship.mean(dim='depth')
+    u_bt_2 = u_bt.reindex(station=ds.station.values)
+    u_bt_transect = xr.DataArray(
+        u_bt_2.values,
+        coords={"distance": ds["distance"]},
+        dims=("distance",),
+        name="barotropic_velocity",
+    )
+    ds = ds.assign(barotropic_velocity=u_bt_transect)
     
     ds["barotropic_velocity"].attrs["units"] = "m/s"
     ds["barotropic_velocity"].attrs["long_name"] = "Barotropic velocity"
@@ -5503,6 +5509,7 @@ def plot_xarray_sections(
     fig: plt.Figure = None,
     axes: list[plt.Axes] = None,
     sill_depth: int = None,
+    cbar_name: list[str] = None,
 ) -> tuple[plt.Figure, list[Any], list]:
     """Function to plot a variable number of variables from a section.
     Data can be from CTD or ADCP, but has to be provided as xarray datasets (see example notebook!)
@@ -5649,10 +5656,16 @@ def plot_xarray_sections(
                     cbar = plt.colorbar(pic, ax=axes[i]) #, extend="neither", extendrect=True)
                     cbar.ax.set_yticks(np.arange(7))
                     cbar.ax.set_yticklabels(wm["Abbr"].tolist())
-                    cbar.ax.set_ylabel(da.attrs['long_name'])
+                    if cbar_name is not None:
+                        cbar.ax.set_ylabel(cbar_name[i])
+                    else:
+                        cbar.ax.set_ylabel(da.attrs['long_name'])
                 else: 
                     cbar = plt.colorbar(pic, ax=axes[i])
-                    cbar.ax.set_ylabel(da.attrs["long_name"])
+                    if cbar_name is not None:
+                        cbar.ax.set_ylabel(cbar_name[i])
+                    else:
+                        cbar.ax.set_ylabel(da.attrs['long_name'])
         else:
             pic = da.plot.pcolormesh(
                 x="distance",
