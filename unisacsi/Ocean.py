@@ -717,11 +717,15 @@ def section_to_xarray(
             coords={"distance": ds_section.time},
             attrs={"units": "km"},
         )
-        ds_section = ds_section.swap_dims({"time": "distance"}).dropna(
-            "depth", how="all"
-        )
-        ds_section = ds_section.transpose("depth", "distance")
-        return ds_section
+        if winds:
+            return ds_section.swap_dims({"time": "distance"})
+        
+        else: 
+            ds_section = ds_section.swap_dims({"time": "distance"}).dropna(
+                "depth", how="all"
+            )
+            ds_section = ds_section.transpose("depth", "distance")
+            return ds_section
 
     elif (stations != None) & (time_periods == None):  # for CTD and L-ADCP
         if len(ds.station.values) != len(np.unique(ds.station.values)):
@@ -5512,6 +5516,7 @@ def plot_xarray_sections(
     axes: list[plt.Axes] = None,
     sill_depth: int = None,
     cbar_name: list[str] = None,
+    ds_wind: xr.DataArray = None,
 ) -> tuple[plt.Figure, list[Any], list]:
     """Function to plot a variable number of variables from a section.
     Data can be from CTD or ADCP, but has to be provided as xarray datasets (see example notebook!)
@@ -5600,7 +5605,10 @@ def plot_xarray_sections(
             f"'add_station_ticks' should be a boolean, not a {type(add_station_ticks).__name__}."
         )
 
-    N_subplots = len(list_das)
+    if ds_wind is not None:
+        N_subplots = len(list_das) + 1
+    else:
+        N_subplots = len(list_das) 
 
     if fig is None and axes is None:
         fig, axes = plt.subplots(
@@ -5622,7 +5630,22 @@ def plot_xarray_sections(
         raise ValueError("'axes' should be a 1D list of matplotlib.pyplot.Axes.")
 
     pics = []
+    if ds_wind is not None:
+        pic = axes[0].quiver(ds_wind.distance, [0]*len(ds_wind.distance), ds_wind.wind_u, ds_wind.wind_v, scale=50, width=0.002)
+        axes[0].tick_params('x', rotation=45)
+        axes[0].set_yticks([])
+        axes[0].set_ylim(-0.5, 0.5)
+        axes[0].grid(alpha=0.3)
+        axes[0].axhline(0, color='black', lw=0.5,)
+        # Remove extra borders
+        axes[0].spines["left"].set_visible(False)
+        axes[0].spines["right"].set_visible(False)
+        axes[0].spines["top"].set_visible(False)
+        plt.quiverkey(pic, 0.1, 0.9, 5, '5 m/s', labelcolor='black')
+        pics.append(pic)
+        
     for i, da in enumerate(list_das):
+        ax_i = i if ds_wind is None else i + 1
         if interp:
             X = da.distance.to_numpy()
             Z = da.depth.to_numpy()
@@ -5641,7 +5664,7 @@ def plot_xarray_sections(
             )  # new grid
             if da.name == "water_mass":
                 data_to_plot = np.round(data_to_plot)
-            pic = axes[i].contourf(
+            pic = axes[ax_i].contourf(
                 X_int,
                 Z_int,
                 data_to_plot,
@@ -5655,7 +5678,7 @@ def plot_xarray_sections(
                 if da.name == "water_mass":
                     path = "C:/Users/Dora van der Pluijm/OneDrive - VDP Beheer/Documents/UiO/thesis/data/"
                     wm = pd.read_csv(os.path.join(path,'AGF214/water_masses.csv'), sep=';')
-                    cbar = plt.colorbar(pic, ax=axes[i]) #, extend="neither", extendrect=True)
+                    cbar = plt.colorbar(pic, ax=axes[ax_i]) #, extend="neither", extendrect=True)
                     cbar.ax.set_yticks(np.arange(7))
                     cbar.ax.set_yticklabels(wm["Abbr"].tolist())
                     if cbar_name is not None:
@@ -5663,7 +5686,7 @@ def plot_xarray_sections(
                     else:
                         cbar.ax.set_ylabel(da.attrs['long_name'])
                 else: 
-                    cbar = plt.colorbar(pic, ax=axes[i])
+                    cbar = plt.colorbar(pic, ax=axes[ax_i])
                     if cbar_name is not None:
                         cbar.ax.set_ylabel(cbar_name[i])
                     else:
@@ -5672,7 +5695,7 @@ def plot_xarray_sections(
             pic = da.plot.pcolormesh(
                 x="distance",
                 y="depth",
-                ax=axes[i],
+                ax=axes[ax_i],
                 shading="nearest",
                 cmap=list_cmaps[i],
                 levels=list_clevels[i],
@@ -5702,7 +5725,7 @@ def plot_xarray_sections(
                     temp_array[mask],  # data
                     tuple(np.meshgrid(X_int, Z_int)),
                 )  # new grid
-                contourlines = axes[i].contour(
+                contourlines = axes[ax_i].contour(
                     X_int,
                     Z_int,
                     data_to_plot,
@@ -5715,7 +5738,7 @@ def plot_xarray_sections(
                 contourlines = da_contours.plot.contour(
                     x="distance",
                     y="depth",
-                    ax=axes[i],
+                    ax=axes[ax_i],
                     levels=contourlevels,
                     colors="k",
                     linewidths=[1],
@@ -5731,10 +5754,10 @@ def plot_xarray_sections(
                 for txt in clabels
             ]
 
-        axes[i].set_xlabel("")
-        axes[i].set_ylabel("Depth [m]")
+        axes[ax_i].set_xlabel("")
+        axes[ax_i].set_ylabel("Depth [m]")
         if sill_depth is not None:
-            axes[i].axhline(sill_depth, color="k", linewidth=3, linestyle="--", label="Sill depth")
+            axes[ax_i].axhline(sill_depth, color="k", linewidth=3, linestyle="--", label="Sill depth")
 
     # extract bathymetry
     bottom = None
@@ -5766,13 +5789,14 @@ def plot_xarray_sections(
 
     if bottom is not None:
         for a in axes:
-            a.fill_between(
-                bottom_x,
-                bottom * 0 + y_limits[1] + 10,
-                bottom,
-                zorder=999,
-                color="gray",
-            )
+            if a.get_ylabel() != '':
+                a.fill_between(
+                    bottom_x,
+                    bottom * 0 + y_limits[1] + 10,
+                    bottom,
+                    zorder=999,
+                    color="gray",
+                )
     else:
         logging.info("No bottom data found!")
 
@@ -5795,8 +5819,10 @@ def plot_xarray_sections(
         if found_stations:
             for s, d in zip(stations, distances):
                 for a in axes:
-                    a.text(d, 0, "v", ha="center", fontweight="bold")
-                axes[0].annotate(
+                    if a.get_ylabel() != '':
+                        a.text(d, 0, "v", ha="center", fontweight="bold")
+                start = 0 if ds_wind is None else 1
+                axes[start].annotate(
                     str(s),
                     (d, 0),
                     xytext=(0, 10),
@@ -5809,10 +5835,11 @@ def plot_xarray_sections(
             )
 
     for a in axes:
-        a.set_xlim(x_limits)
-        a.set_ylim(y_limits)
-        a.invert_yaxis()
-        a.yaxis.set_ticks_position("both")
+        if a.get_ylabel() != '':
+            a.set_xlim(x_limits)
+            a.set_ylim(y_limits)
+            a.invert_yaxis()
+            a.yaxis.set_ticks_position("both")
 
     axes[-1].set_xlabel("Distance [km]")
 
