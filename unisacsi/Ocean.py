@@ -656,6 +656,7 @@ def section_to_xarray(
     time_periods: list = None,
     ship_speed_threshold: float = 1.0,
     direction: str = None,
+    winds: bool = False,
 ) -> xr.Dataset:
     """Function to extract one section from the CTD/ADCP dataset from the whole cruise and return a new dataset, where distance along the section is the new dimension.
 
@@ -694,9 +695,10 @@ def section_to_xarray(
             if time_periods[0][0] > time_periods[-1][0]:
                 ds_section = ds_section.sortby("time", ascending=False)
 
-        ds_section = ds_section.where(
-            ds_section["Speed_ship"] > ship_speed_threshold, drop=True
-        )
+        if winds==False:
+            ds_section = ds_section.where(
+                ds_section["Speed_ship"] > ship_speed_threshold, drop=True
+            )
 
         if ds_section.sizes["time"] == 0:
             raise ValueError(
