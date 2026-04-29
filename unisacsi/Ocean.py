@@ -28,7 +28,6 @@ from collections import Counter
 from itertools import chain
 from typing import Any, Literal, get_args, overload
 
-
 import warnings
 
 warnings.filterwarnings(
@@ -40,6 +39,7 @@ warnings.filterwarnings(
 import matplotlib
 import matplotlib.axes
 import matplotlib.pyplot as plt
+from matplotlib import ticker
 from matplotlib.dates import date2num, datestr2num
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
@@ -675,6 +675,11 @@ def section_to_xarray(
         raise TypeError(
             f"'ship_speed_threshold' should be a float, not a {type(ship_speed_threshold).__name__}."
         )
+        
+    def slice_right_times(ds, start, end):
+        ds1 = ds.sel(time=start, method='nearest')
+        ds2 = ds.sel(time=end, method='nearest')
+        
 
     if (stations == None) & (time_periods != None):  # for VM-ADCP
         ds_section: list = []
@@ -3505,6 +3510,7 @@ def detide_VMADCP(
     path_tidal_models: str,
     tidal_model: str | __tidal_models__ = "Arc2kmTM",
     method: str | __inter_methods__ = "spline",
+    ladcp: bool = False,
 ) -> xr.Dataset:
     """Function to correct the VM-ADCP data for the tides
     (substract the tidal currents from the measurements).
@@ -3546,13 +3552,22 @@ def detide_VMADCP(
             f"'method' should be 'bilinear', 'spline', 'linear' or 'nearest', not {method}."
         )
 
+    if ladcp:
+        lon = ds.LONGITUDE.values
+        lat = ds.LATITUDE.values
+        time = ds.TIME
+    else: 
+        lon = ds.lon.values
+        lat = ds.lat.values
+        time = ds.time
+        
     time: NDArray = (
-        (ds.time.to_pandas() - pd.Timestamp(1970, 1, 1, 0, 0, 0)).dt.total_seconds()
+        (time.to_pandas() - pd.Timestamp(1970, 1, 1, 0, 0, 0)).dt.total_seconds()
     ).values
 
-    tide_uv: dict = pyTMD.compute.tide_currents(
-        ds.lon.values,
-        ds.lat.values,
+    tide_uv: dict = pyTMD.compute.tide_currents( 
+        lon, 
+        lat,
         time,
         DIRECTORY=path_tidal_models,
         MODEL=tidal_model,
@@ -5611,9 +5626,17 @@ def plot_xarray_sections(
         N_subplots = len(list_das) 
 
     if fig is None and axes is None:
-        fig, axes = plt.subplots(
-            N_subplots, 1, sharey=True, sharex=True, figsize=(12, N_subplots * 4)
-        )
+        if ds_wind is not None:
+            fig, axes = plt.subplots(
+                N_subplots, 1, sharey=False, sharex=False, figsize=(15, N_subplots * 4), gridspec_kw={'height_ratios': [1] + [2.5]*(N_subplots-1)}
+            )  
+            fig.subplots_adjust(left=0.4, right=0.84)
+        else: 
+            fig, axes = plt.subplots(
+                N_subplots, 1, sharey=True, sharex=True, figsize=(12, N_subplots * 4)
+            )
+            if switch_cbar: 
+                fig.subplots_adjust(right=0.84)
         if N_subplots == 1:
             axes = [axes]
     elif fig is None or axes is None:
@@ -5631,17 +5654,24 @@ def plot_xarray_sections(
 
     pics = []
     if ds_wind is not None:
-        pic = axes[0].quiver(ds_wind.distance, [0]*len(ds_wind.distance), ds_wind.wind_u, ds_wind.wind_v, scale=50, width=0.002)
-        axes[0].tick_params('x', rotation=45)
-        axes[0].set_yticks([])
-        axes[0].set_ylim(-0.5, 0.5)
+        pic = axes[0].quiver(ds_wind.distance, [0]*len(ds_wind.distance), ds_wind.wind_u, ds_wind.wind_v, 
+                             scale=100, width=0.002, clip_on = False)
+        axes[0].set_xlim(0, ds_wind.distance.max())
         axes[0].grid(alpha=0.3)
-        axes[0].axhline(0, color='black', lw=0.5,)
+        axes[0].set_yticks([])
+        axes[0].tick_params(axis='both', which='both', bottom=False, top=False, labelbottom=False)
+        axes[0].axhline(0, color='k', lw=0.5,)
         # Remove extra borders
         axes[0].spines["left"].set_visible(False)
         axes[0].spines["right"].set_visible(False)
         axes[0].spines["top"].set_visible(False)
-        plt.quiverkey(pic, 0.1, 0.9, 5, '5 m/s', labelcolor='black')
+        axes[0].spines["bottom"].set_visible(False)
+        
+        pos = axes[0].get_position()
+        keyax = fig.add_axes([0.85, pos.y0, 0.02, pos.height])
+        keyax.set_axis_off()
+        keyax.quiverkey(pic, X=0.88, Y=0.825, U=5, label="5 m/s", coordinates="figure", labelpos="S")
+        keyax.quiverkey(pic, X=0.88, Y=0.825, U=5, label="Wind speed", coordinates="figure", labelpos="N")
         pics.append(pic)
         
     for i, da in enumerate(list_das):
@@ -5686,7 +5716,13 @@ def plot_xarray_sections(
                     else:
                         cbar.ax.set_ylabel(da.attrs['long_name'])
                 else: 
-                    cbar = plt.colorbar(pic, ax=axes[ax_i])
+                    pos = axes[ax_i].get_position()
+                    cax = fig.add_axes([0.86, pos.y0, 0.012, pos.height])
+                    cbar = fig.colorbar(pic, cax=cax)
+                    cbar.formatter = ticker.ScalarFormatter()
+                    cbar.formatter.set_scientific(True)
+                    cbar.formatter.set_powerlimits((-3, 3))
+                    cbar.update_ticks()
                     if cbar_name is not None:
                         cbar.ax.set_ylabel(cbar_name[i])
                     else:
@@ -5821,14 +5857,15 @@ def plot_xarray_sections(
                 for a in axes:
                     if a.get_ylabel() != '':
                         a.text(d, 0, "v", ha="center", fontweight="bold")
-                start = 0 if ds_wind is None else 1
-                axes[start].annotate(
-                    str(s),
-                    (d, 0),
-                    xytext=(0, 10),
-                    textcoords="offset points",
-                    ha="center",
-                )
+                if len(list_das) != 0:
+                    start = 0 if ds_wind is None else 1
+                    axes[start].annotate(
+                        str(s),
+                        (d, 0),
+                        xytext=(0, 10),
+                        textcoords="offset points",
+                        ha="center",
+                    )
         else:
             logging.info(
                 "Station ticks not possible, no station data found in the provided data!"
